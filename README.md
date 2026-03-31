@@ -4,29 +4,29 @@ An intelligent, AI-powered career analysis tool that helps recruiters evaluate c
 
 ---
 
-## ✨ Features
+## Features
 
-### 🤖 AI-Powered Resume Analysis
+### AI-Powered Resume Analysis
 - Upload any PDF resume and get it automatically parsed, chunked, and vectorized
 - Ask natural language questions about candidates ("Is this candidate a good fit for a frontend role?")
 - Receive structured responses with Executive Summary, Technical Match, and Strengths analysis
 
-### 💬 Multi-Conversation Management
+### Multi-Conversation Management
 - Create multiple chat sessions, each with its own uploaded resume
 - Switch between conversations seamlessly
 - Delete conversations you no longer need (with confirmation)
 
-### 📄 Resume Preview Panel
+### Resume Preview Panel
 - Side-panel to view the uploaded PDF right next to the chat window
 - Instantly reference the original resume while reviewing AI analysis
 - Powered by Supabase Storage with secure signed URLs
 
-### 📊 Download as PDF Report
+### Download as PDF Report
 - Export the complete AI analysis as a professionally formatted PDF
 - Share reports with your team — no account needed to view
 - Includes all Q&A pairs with structured formatting
 
-### 🎨 Premium UI/UX
+### Premium UI/UX
 - Dark-themed glassmorphism design with red accent palette
 - Magnetic hover effects on interactive elements
 - Shimmer loading skeletons during AI processing
@@ -36,7 +36,7 @@ An intelligent, AI-powered career analysis tool that helps recruiters evaluate c
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
@@ -50,7 +50,7 @@ An intelligent, AI-powered career analysis tool that helps recruiters evaluate c
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ai-career-assistant/
@@ -86,7 +86,7 @@ ai-career-assistant/
 
 ---
 
-## ⚡ Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -139,7 +139,7 @@ The client will start on `http://localhost:5173`.
 
 ---
 
-## 🗄️ MongoDB Atlas Setup
+## MongoDB Atlas Setup
 
 ### Vector Search Index
 
@@ -168,7 +168,7 @@ Create a vector search index named `vector_index` on the `career_assistant.resum
 
 ---
 
-## 🪣 Supabase Storage Setup
+## Supabase Storage Setup
 
 1. Create a new **Storage Bucket** named `resumes`
 2. Set bucket to **private** (not public)
@@ -180,7 +180,7 @@ Create a vector search index named `vector_index` on the `career_assistant.resum
 
 ---
 
-## 🔌 API Endpoints
+## API Endpoints
 
 ### Authentication
 | Method | Endpoint | Description |
@@ -207,13 +207,13 @@ Create a vector search index named `vector_index` on the `career_assistant.resum
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 *Screenshots coming soon*
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -229,11 +229,3 @@ This project is open source and available under the [MIT License](LICENSE).
 
 ---
 
-## 🙏 Credits
-
-- [Google Gemini AI](https://ai.google.dev/) — LLM & Embedding models
-- [MongoDB Atlas](https://www.mongodb.com/atlas) — Database & Vector Search
-- [Supabase](https://supabase.com/) — File Storage
-- [Framer Motion](https://www.framer.com/motion/) — Animations
-- [Lucide Icons](https://lucide.dev/) — Icon library
-- [html2pdf.js](https://github.com/eKoopmans/html2pdf.js) — Client-side PDF generation
