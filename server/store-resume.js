@@ -1,71 +1,79 @@
 import fs from "fs";
 import pdf from "pdf-parse-fork";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { MongoClient } from "mongodb";
 import * as dotenv from "dotenv";
 
 dotenv.config();
 
-console.log("1. Environment Loaded. Checking URI...");
 const uri = process.env.MONGO_URI;
+const apiKey = process.env.GEMINI_API_KEY;
 
-if (!uri) {
-  console.error("❌ FATAL: MONGO_URI is missing from .env!");
+if (!uri || !apiKey) {
+  console.error("❌ FATAL: Missing MONGO_URI or GEMINI_API_KEY in .env");
   process.exit(1);
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const genAI = new GoogleGenerativeAI(apiKey);
 const client = new MongoClient(uri);
 
 const main = async () => {
-  console.log("2. Main function started...");
   try {
-    console.log("3. Attempting to connect to MongoDB...");
+    console.log("🚀 Connecting to MongoDB Atlas...");
     await client.connect();
-    console.log("✅ 4. Connected to MongoDB!");
-
+    
     const db = client.db("career_assistant");
     const collection = db.collection("resumes");
 
-    console.log("5. Reading PDF...");
+    // 🔥 CRITICAL CHANGE: Clear old data to prevent dimension mismatch errors
+    console.log("🧹 Clearing old incompatible vectors...");
+    await collection.deleteMany({}); 
+
+    const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
+
+    console.log("📄 Reading PDF file...");
     const dataBuffer = fs.readFileSync("./deepFinalCV.pdf");
     const data = await pdf(dataBuffer);
 
-    const chunks = data.text.split("\n").filter((c) => c.trim().length > 20);
-    console.log(
-      `✅ 6. Found ${chunks.length} chunks. Starting vectorization...`,
-    );
+    // Filter out tiny fragments
+    const chunks = data.text
+      .split("\n\n")
+      .map(c => c.trim())
+      .filter((c) => c.length > 20);
+
+    console.log(`✅ Extracted ${chunks.length} valid chunks.`);
 
     for (let i = 0; i < chunks.length; i++) {
-      // Note the updated structure for contents
-      const result = await ai.models.embedContent({
-        model: "text-embedding-004",
-        contents: [
-          {
-            parts: [{ text: chunks[i] }],
-          },
-        ],
-      });
+      try {
+        // Generate Embedding (768 dimensions)
+        const result = await model.embedContent({
+          content: { parts: [{ text: chunks[i] }] },
+          taskType: "RETRIEVAL_DOCUMENT",
+          outputDimensionality: 768,
+        });
 
-      // The SDK returns an array of embeddings because we sent an array of contents
-      const embedding = result.embeddings[0].values;
+        const embedding = result.embedding.values;
 
-      await collection.insertOne({
-        text: chunks[i],
-        vector: embedding,
-        uploadedAt: new Date(),
-      });
-      console.log(`   - Stored chunk ${i + 1}`);
+        await collection.insertOne({
+          text: chunks[i],
+          vector: embedding, // This is your 768-dim array
+          metadata: { source: "deepFinalCV.pdf", chunkIndex: i },
+          uploadedAt: new Date(),
+        });
+
+        console.log(`   [${i + 1}/${chunks.length}] Stored successfully.`);
+      } catch (embedError) {
+        console.error(`   ❌ Failed on chunk ${i}:`, embedError.message);
+      }
     }
 
-    console.log("🎉 SUCCESS: Resume stored in Atlas!");
+    console.log("\n🎉 ALL DONE! Your database is now clean and searchable.");
+    
   } catch (error) {
-    console.error("❌ ERROR:", error);
+    console.error("\n❌ GLOBAL ERROR:", error.message);
   } finally {
     await client.close();
-    console.log("7. Connection closed.");
   }
 };
 
-// Explicitly call the function and catch top-level errors
-main().catch((err) => console.error("GLOBAL ERROR:", err));
+main();
