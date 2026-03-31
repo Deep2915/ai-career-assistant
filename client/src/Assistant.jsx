@@ -25,6 +25,8 @@ import {
   PanelRightClose,
   Eye,
   AlertTriangle,
+  RotateCcw,
+  HelpCircle,
 } from "lucide-react";
 
 /* ─────────────────────────────────────────
@@ -654,6 +656,66 @@ function ResumePanel({ url, fileName, onClose }) {
   );
 }
 
+/* ─────────────────────────────────────────
+   SUGGESTED QUESTION CHIPS
+───────────────────────────────────────── */
+const SUGGESTED_QUESTIONS = [
+  { emoji: "💡", text: "What are my React skills?" },
+  { emoji: "📊", text: "Analyze my resume strengths" },
+  { emoji: "🎯", text: "What roles suit my profile?" },
+  { emoji: "🛠", text: "How can I improve my skills?" },
+  { emoji: "📈", text: "Rate my resume out of 10" },
+];
+
+function SuggestedChips({ onSelect, visible }) {
+  if (!visible) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 6 }}
+      transition={{ type: "spring", stiffness: 300, damping: 26, delay: 0.1 }}
+      className="flex flex-wrap justify-center gap-2 mt-3"
+    >
+      {SUGGESTED_QUESTIONS.map(({ emoji, text }, i) => (
+        <motion.button
+          key={text}
+          type="button"
+          onClick={() => onSelect(text)}
+          initial={{ opacity: 0, y: 8, scale: 0.92 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{
+            type: "spring",
+            stiffness: 360,
+            damping: 22,
+            delay: 0.15 + i * 0.06,
+          }}
+          whileHover={{
+            scale: 1.05,
+            backgroundColor: "rgba(200,30,58,0.18)",
+            borderColor: "rgba(200,30,58,0.5)",
+            color: "#fda4af",
+            y: -2,
+          }}
+          whileTap={{ scale: 0.95 }}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs cursor-pointer"
+          style={{
+            background: "rgba(200,30,58,0.07)",
+            border: "1px solid rgba(200,30,58,0.18)",
+            color: "rgba(253,164,175,0.6)",
+            backdropFilter: "blur(6px)",
+            transition: "box-shadow 0.2s ease",
+          }}
+        >
+          <span style={{ fontSize: 13 }}>{emoji}</span>
+          <span>{text}</span>
+        </motion.button>
+      ))}
+    </motion.div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════════ */
@@ -765,6 +827,37 @@ function Assistant() {
     setToastMessage(msg);
     setToast(true);
     setTimeout(() => setToast(false), 3000);
+  };
+
+  const handleClearChat = () => {
+    if (chats.length === 0) return;
+    setChats([]);
+    setQuestion("");
+    showToast("Chat cleared");
+  };
+
+  const handleChipSelect = (chipText) => {
+    setQuestion(chipText);
+    // Auto-submit the selected chip question
+    setTimeout(() => {
+      const fakeEvent = { preventDefault: () => {} };
+      setQuestion(""); // Clear before sending
+      setLoading(true);
+      axios
+        .post(
+          "http://localhost:5000/api/chat",
+          { question: chipText, conversationId: currentId },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        .then((response) => {
+          setChats((prev) => [
+            ...prev,
+            { question: chipText, answer: response.data.answer },
+          ]);
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }, 50);
   };
 
   const handleSearch = async (e) => {
@@ -1331,6 +1424,14 @@ function Assistant() {
               onClick={() => setShowResumePanel(!showResumePanel)}
             />
 
+            {/* Clear Chat */}
+            <GlassButton
+              icon={RotateCcw}
+              label="Clear"
+              active={false}
+              onClick={handleClearChat}
+            />
+
             {/* Download PDF Report */}
             <GlassButton
               icon={Download}
@@ -1571,6 +1672,16 @@ function Assistant() {
                   <SendButton disabled={loading || !question.trim()} />
                 </motion.div>
               </form>
+
+              {/* Suggested Question Chips */}
+              <div className="max-w-2xl mx-auto">
+                <AnimatePresence>
+                  <SuggestedChips
+                    onSelect={handleChipSelect}
+                    visible={chats.length === 0 && !loading}
+                  />
+                </AnimatePresence>
+              </div>
             </div>
           </div>
 
