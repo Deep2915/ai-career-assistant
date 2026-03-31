@@ -1,1 +1,12 @@
 @import "tailwindcss";
+
+body {
+  font-family: 'Inter', 'DM Sans', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6,
+.font-heading {
+  font-family: 'DM Sans', 'Inter', system-ui, -apple-system, sans-serif;
+}

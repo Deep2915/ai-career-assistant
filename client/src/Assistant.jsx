@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import ReactMarkdown from "react-markdown";
+
 import {
   motion,
   AnimatePresence,
   useMotionValue,
   useSpring,
-  useTransform,
 } from "framer-motion";
 import {
   Plus,
@@ -19,6 +19,12 @@ import {
   Sparkles,
   X,
   CheckCircle2,
+  Trash2,
+  FileText,
+  Download,
+  PanelRightClose,
+  Eye,
+  AlertTriangle,
 } from "lucide-react";
 
 /* ─────────────────────────────────────────
@@ -108,6 +114,38 @@ function TypingDots() {
         />
       ))}
     </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   SHIMMER LINE — loading placeholder
+───────────────────────────────────────── */
+function ShimmerLine({ width = "60%", delay = 0 }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay }}
+      style={{
+        height: 8,
+        width,
+        borderRadius: 4,
+        background: "linear-gradient(90deg, rgba(200,30,58,0.08) 0%, rgba(200,30,58,0.18) 50%, rgba(200,30,58,0.08) 100%)",
+        backgroundSize: "200% 100%",
+      }}
+    >
+      <motion.div
+        style={{
+          width: "100%",
+          height: "100%",
+          borderRadius: 4,
+          background: "linear-gradient(90deg, transparent 0%, rgba(200,30,58,0.15) 50%, transparent 100%)",
+          backgroundSize: "200% 100%",
+        }}
+        animate={{ backgroundPosition: ["200% 0", "-200% 0"] }}
+        transition={{ duration: 1.8, repeat: Infinity, ease: "linear", delay }}
+      />
+    </motion.div>
   );
 }
 
@@ -211,6 +249,7 @@ function AttachZone({ file, setFile }) {
       <input
         id="resume-file"
         type="file"
+        accept=".pdf"
         className="hidden"
         onChange={(e) => setFile(e.target.files[0])}
       />
@@ -283,7 +322,7 @@ function SendButton({ disabled, onClick }) {
 /* ─────────────────────────────────────────
    TOAST — spring in / out
 ───────────────────────────────────────── */
-function Toast({ show }) {
+function Toast({ show, message = "Resume uploaded successfully" }) {
   return (
     <AnimatePresence>
       {show && (
@@ -312,7 +351,7 @@ function Toast({ show }) {
           >
             <CheckCircle2 size={14} />
           </motion.span>
-          Resume uploaded successfully
+          {message}
         </motion.div>
       )}
     </AnimatePresence>
@@ -320,12 +359,75 @@ function Toast({ show }) {
 }
 
 /* ─────────────────────────────────────────
-   CONVERSATION ITEM — slides + active bar
+   DELETE CONFIRMATION OVERLAY
 ───────────────────────────────────────── */
-function ConvItem({ conv, active, onClick }) {
+function DeleteConfirm({ onConfirm, onCancel }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9, y: -4 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.9, y: -4 }}
+      transition={{ type: "spring", stiffness: 500, damping: 28 }}
+      className="absolute inset-0 z-20 flex items-center justify-center gap-1.5 rounded-lg"
+      style={{
+        background: "rgba(14,4,7,0.95)",
+        border: "1px solid rgba(239,68,68,0.35)",
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      <motion.span
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ delay: 0.05, type: "spring", stiffness: 400 }}
+        style={{ color: "rgba(248,113,113,0.8)", display: "flex" }}
+      >
+        <AlertTriangle size={11} />
+      </motion.span>
+      <span className="text-[10px]" style={{ color: "rgba(248,113,113,0.8)" }}>
+        Delete?
+      </span>
+      <motion.button
+        onClick={(e) => { e.stopPropagation(); onConfirm(); }}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        className="px-1.5 py-0.5 rounded text-[9px] font-medium"
+        style={{
+          background: "rgba(239,68,68,0.25)",
+          border: "1px solid rgba(239,68,68,0.4)",
+          color: "#fca5a5",
+        }}
+      >
+        Yes
+      </motion.button>
+      <motion.button
+        onClick={(e) => { e.stopPropagation(); onCancel(); }}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        className="px-1.5 py-0.5 rounded text-[9px] font-medium"
+        style={{
+          background: "rgba(148,163,184,0.1)",
+          border: "1px solid rgba(148,163,184,0.2)",
+          color: "rgba(148,163,184,0.6)",
+        }}
+      >
+        No
+      </motion.button>
+    </motion.div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   CONVERSATION ITEM — slides + active bar + delete
+───────────────────────────────────────── */
+function ConvItem({ conv, active, onClick, onDelete }) {
+  const [hover, setHover] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   return (
     <motion.button
       onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => { setHover(false); setConfirmDelete(false); }}
       layout
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
@@ -347,6 +449,39 @@ function ConvItem({ conv, active, onClick }) {
       <span className="truncate flex-1">
         {conv.title || "New conversation"}
       </span>
+
+      {/* Delete button — appears on hover */}
+      <AnimatePresence>
+        {hover && !confirmDelete && (
+          <motion.span
+            initial={{ opacity: 0, scale: 0, x: 4 }}
+            animate={{ opacity: 1, scale: 1, x: 0 }}
+            exit={{ opacity: 0, scale: 0, x: 4 }}
+            transition={{ type: "spring", stiffness: 500, damping: 22 }}
+            onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+            whileHover={{ color: "#f87171", scale: 1.2 }}
+            whileTap={{ scale: 0.85 }}
+            style={{
+              display: "flex",
+              flexShrink: 0,
+              color: "rgba(248,113,113,0.4)",
+              cursor: "pointer",
+            }}
+          >
+            <Trash2 size={11} />
+          </motion.span>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation overlay */}
+      <AnimatePresence>
+        {confirmDelete && (
+          <DeleteConfirm
+            onConfirm={() => { setConfirmDelete(false); onDelete(conv._id); }}
+            onCancel={() => setConfirmDelete(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* glowing left accent bar */}
       <AnimatePresence>
@@ -382,7 +517,7 @@ function AiBubble({ answer }) {
       initial={{ opacity: 0, y: 8, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ type: "spring", stiffness: 300, damping: 28 }}
-      className="flex-1 px-5 py-4 rounded-2xl rounded-tl-sm text-sm leading-relaxed"
+      className="flex-1 px-5 py-4 rounded-2xl rounded-tl-sm text-sm leading-relaxed ai-bubble-content"
       style={{
         background: "rgba(10,3,6,0.78)",
         border: "1px solid rgba(200,30,58,0.13)",
@@ -390,6 +525,131 @@ function AiBubble({ answer }) {
       }}
     >
       <ReactMarkdown>{answer}</ReactMarkdown>
+    </motion.div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   GLASS ICON BUTTON
+───────────────────────────────────────── */
+function GlassButton({ icon: Icon, label, onClick, active, size = 14, badge }) {
+  return (
+    <Magnetic strength={0.3}>
+      <motion.button
+        onClick={onClick}
+        whileHover={{
+          scale: 1.08,
+          backgroundColor: "rgba(200,30,58,0.18)",
+          borderColor: "rgba(200,30,58,0.4)",
+        }}
+        whileTap={{ scale: 0.92 }}
+        transition={{ type: "spring", stiffness: 400, damping: 20 }}
+        className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs"
+        style={{
+          background: active ? "rgba(200,30,58,0.15)" : "rgba(200,30,58,0.05)",
+          border: `1px solid ${active ? "rgba(200,30,58,0.35)" : "rgba(200,30,58,0.18)"}`,
+          color: active ? "#fda4af" : "rgba(253,164,175,0.55)",
+          backdropFilter: "blur(8px)",
+        }}
+        title={label}
+      >
+        <motion.span
+          style={{ display: "flex" }}
+          animate={active ? { rotate: [0, -8, 8, 0] } : {}}
+          transition={{ duration: 0.4 }}
+        >
+          <Icon size={size} />
+        </motion.span>
+        <span className="hidden sm:inline">{label}</span>
+        {badge && (
+          <motion.span
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute -top-1 -right-1 w-2 h-2 rounded-full"
+            style={{
+              background: "#e8445e",
+              boxShadow: "0 0 6px rgba(232,68,94,0.6)",
+            }}
+          />
+        )}
+      </motion.button>
+    </Magnetic>
+  );
+}
+
+/* ─────────────────────────────────────────
+   RESUME PREVIEW PANEL
+───────────────────────────────────────── */
+function ResumePanel({ url, fileName, onClose }) {
+  return (
+    <motion.div
+      initial={{ x: "100%", opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: "100%", opacity: 0 }}
+      transition={{ type: "spring", stiffness: 300, damping: 32 }}
+      className="flex flex-col border-l relative z-10"
+      style={{
+        width: 420,
+        flexShrink: 0,
+        borderColor: "rgba(200,30,58,0.14)",
+        background: "rgba(12,4,7,0.82)",
+        backdropFilter: "blur(20px)",
+      }}
+    >
+      {/* Panel header */}
+      <div
+        className="flex items-center justify-between px-4 h-14 flex-shrink-0"
+        style={{
+          borderBottom: "1px solid rgba(200,30,58,0.12)",
+          background: "rgba(0,0,0,0.2)",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <motion.span
+            animate={{ rotate: [0, 10, -10, 0] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            style={{ color: "#fb7185", display: "flex" }}
+          >
+            <FileText size={14} />
+          </motion.span>
+          <span className="text-xs font-medium" style={{ color: "#fda4af" }}>
+            {fileName || "Resume Preview"}
+          </span>
+        </div>
+        <motion.button
+          onClick={onClose}
+          whileHover={{ scale: 1.15, rotate: 90 }}
+          whileTap={{ scale: 0.85 }}
+          transition={{ type: "spring", stiffness: 400, damping: 14 }}
+          style={{ color: "rgba(148,163,184,0.4)" }}
+        >
+          <PanelRightClose size={16} />
+        </motion.button>
+      </div>
+
+      {/* PDF embed */}
+      <div className="flex-1 relative">
+        {url ? (
+          <iframe
+            src={url}
+            className="w-full h-full"
+            style={{ border: "none", background: "rgba(0,0,0,0.3)" }}
+            title="Resume Preview"
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <motion.div
+              animate={{ opacity: [0.3, 0.7, 0.3] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              <FileText size={32} style={{ color: "rgba(200,30,58,0.25)" }} />
+            </motion.div>
+            <span className="text-xs" style={{ color: "rgba(148,163,184,0.35)" }}>
+              No resume uploaded for this conversation
+            </span>
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 }
@@ -406,9 +666,15 @@ function Assistant() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("Resume uploaded successfully");
   const [inputFocused, setInputFocused] = useState(false);
+  const [showResumePanel, setShowResumePanel] = useState(false);
+  const [resumeUrl, setResumeUrl] = useState(null);
+  const [resumeFileName, setResumeFileName] = useState(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const chatEndRef = useRef(null);
+  const reportRef = useRef(null);
   const token = localStorage.getItem("token");
 
   useEffect(() => {
@@ -434,6 +700,8 @@ function Assistant() {
   // Load chat history when switching conversations
   useEffect(() => {
     const loadConversation = async () => {
+      // Always clear chats first when switching conversations
+      setChats([]);
       try {
         const { data } = await axios.get(
           `http://localhost:5000/api/chats/${currentId}`,
@@ -449,10 +717,54 @@ function Assistant() {
     loadConversation();
   }, [currentId]);
 
+  // Fetch resume URL when conversation changes or panel opens
+  useEffect(() => {
+    if (!showResumePanel) return;
+    const fetchResumeUrl = async () => {
+      try {
+        const { data } = await axios.get(
+          `http://localhost:5000/api/resume-file/${currentId}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        setResumeUrl(data.url);
+        setResumeFileName(data.fileName);
+      } catch {
+        setResumeUrl(null);
+        setResumeFileName(null);
+      }
+    };
+    fetchResumeUrl();
+  }, [currentId, showResumePanel]);
+
   const startNewChat = () => {
     setCurrentId(uuidv4());
     setChats([]);
     setQuestion("");
+    setResumeUrl(null);
+    setResumeFileName(null);
+  };
+
+  const handleDeleteConversation = async (convId) => {
+    try {
+      await axios.delete(
+        `http://localhost:5000/api/conversations/${convId}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      // If deleting the active conversation, start a new one
+      if (convId === currentId) {
+        startNewChat();
+      }
+      showToast("Conversation deleted");
+      fetchConversations();
+    } catch {
+      showToast("Failed to delete conversation");
+    }
+  };
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setToast(true);
+    setTimeout(() => setToast(false), 3000);
   };
 
   const handleSearch = async (e) => {
@@ -480,6 +792,7 @@ function Assistant() {
     setUploading(true);
     const formData = new FormData();
     formData.append("resume", file);
+    formData.append("conversationId", currentId);
     try {
       await axios.post("http://localhost:5000/api/upload-resume", formData, {
         headers: {
@@ -488,11 +801,261 @@ function Assistant() {
         },
       });
       setFile(null);
-      setToast(true);
-      setTimeout(() => setToast(false), 3000);
+      showToast("Resume uploaded successfully");
     } catch {}
     setUploading(false);
   };
+
+  // ── Markdown → HTML converter for PDF export ──
+  const markdownToHtml = (md) => {
+    let html = md;
+    // Escape HTML entities
+    html = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    // Headers: ### → <h3>, ## → <h2>, # → <h1>
+    html = html.replace(/^### (.+)$/gm, '<h3 style="font-size:13px;font-weight:700;color:#e8445e;margin:12px 0 6px 0;">$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2 style="font-size:14px;font-weight:700;color:#c81e3a;margin:14px 0 6px 0;">$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1 style="font-size:16px;font-weight:700;color:#c81e3a;margin:16px 0 8px 0;">$1</h1>');
+    // Bold: **text**
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#1a1a2e;font-weight:700;">$1</strong>');
+    // Italic: *text*
+    html = html.replace(/\*(.+?)\*/g, '<em style="color:#333;font-style:italic;">$1</em>');
+    // Horizontal rule
+    html = html.replace(/^---$/gm, '<hr style="border:none;border-top:1px solid #eee;margin:12px 0;"/>');
+    // Numbered lists: 1. text
+    html = html.replace(/^(\d+)\. (.+)$/gm, '<div style="padding-left:16px;margin:3px 0;color:#333;"><span style="color:#c81e3a;font-weight:600;margin-right:6px;">$1.</span>$2</div>');
+    // Bullet lists: - text
+    html = html.replace(/^[-•] (.+)$/gm, '<div style="padding-left:16px;margin:3px 0;color:#333;"><span style="color:#e8445e;margin-right:8px;">•</span>$1</div>');
+    // Line breaks
+    html = html.replace(/\n/g, "<br/>");
+    // Clean up double <br/> after block elements  
+    html = html.replace(/(<\/h[123]>)<br\/>/g, "$1");
+    html = html.replace(/(<\/div>)<br\/>/g, "$1");
+    html = html.replace(/(<hr[^>]*\/>)<br\/>/g, "$1");
+    return html;
+  };
+
+  // ── Extract candidate info from chat answers ──
+  const extractCandidateInfo = () => {
+    if (chats.length === 0) return { name: "Unknown Candidate", details: "" };
+    // Look through all answers for common name patterns
+    const allText = chats.map(c => c.answer).join("\n");
+    // Try to find candidate name mentioned in analysis
+    let name = "Candidate";
+    const namePatterns = [
+      /candidate(?:'s| is| name is|,)\s+\*?\*?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){1,5})/i,
+      /\*\*([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){1,5})\*\*/,
+      /name:\s*\*?\*?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){1,5})/i,
+    ];
+    for (const pattern of namePatterns) {
+      const match = allText.match(pattern);
+      if (match && match[1] && match[1].length < 60) {
+        name = match[1].replace(/\*+/g, "").trim();
+        break;
+      }
+    }
+    // Try to extract skills and education
+    let skills = "";
+    const skillsMatch = allText.match(/(?:skills?|technologies|tech stack)[:\s]*([^\n.]+)/i);
+    if (skillsMatch) skills = skillsMatch[1].replace(/\*+/g, "").trim().slice(0, 120);
+    
+    return { name, skills };
+  };
+
+  // ── Download as PDF Report (Dark Theme) ──
+  const handleExportPdf = useCallback(() => {
+    if (chats.length === 0 || exportingPdf) return;
+    setExportingPdf(true);
+
+    const now = new Date().toLocaleDateString("en-US", {
+      year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+
+    const candidate = extractCandidateInfo();
+    const resumeName = resumeFileName ? resumeFileName.replace(/\.pdf$/i, "") : "";
+
+    let chatHTML = "";
+    chats.forEach((chat, i) => {
+      chatHTML += `
+        <div class="qa-block">
+          <div class="question-block">
+            <p class="label">Question ${i + 1}</p>
+            <p class="question-text">${chat.question}</p>
+          </div>
+          <div class="answer-block">
+            ${markdownToHtml(chat.answer)}
+          </div>
+        </div>
+      `;
+    });
+
+    const fullHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AI Career Analysis Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      background: #ffffff;
+      color: #1a1a2e;
+      padding: 40px 36px;
+    }
+    @media print {
+      body { padding: 20px 24px; }
+      .qa-block { page-break-inside: avoid; }
+      .no-print { display: none !important; }
+    }
+    @page {
+      size: A4;
+      margin: 12mm 10mm;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding-bottom: 22px;
+      border-bottom: 2px solid #c81e3a;
+    }
+    .header-icon {
+      display: inline-block;
+      background: linear-gradient(135deg, #c81e3a, #e8445e);
+      padding: 8px 14px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      font-size: 18px;
+      color: white;
+    }
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #c81e3a;
+      margin: 6px 0 4px;
+      letter-spacing: -0.3px;
+    }
+    .header .subtitle {
+      font-size: 11px;
+      color: #888;
+    }
+    .candidate-card {
+      background: #fef2f2;
+      border: 1px solid rgba(200,30,58,0.2);
+      border-radius: 12px;
+      padding: 18px 22px;
+      margin-bottom: 28px;
+    }
+    .candidate-card .label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #999;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .candidate-card .name {
+      font-size: 17px;
+      font-weight: 700;
+      color: #c81e3a;
+      margin-bottom: 4px;
+    }
+    .candidate-card .detail {
+      font-size: 11px;
+      color: #555;
+      margin-bottom: 2px;
+    }
+    .qa-block {
+      margin-bottom: 22px;
+    }
+    .question-block {
+      background: #fef2f2;
+      border-left: 3px solid #e8445e;
+      padding: 10px 16px;
+      border-radius: 0 10px 10px 0;
+      margin-bottom: 10px;
+    }
+    .question-block .label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #999;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .question-text {
+      font-size: 13px;
+      color: #1a1a2e;
+      font-weight: 500;
+    }
+    .answer-block {
+      padding: 10px 16px;
+      font-size: 12px;
+      line-height: 1.8;
+      color: #333;
+    }
+    .answer-block h1 { font-size: 16px; font-weight: 700; color: #c81e3a; margin: 16px 0 8px; }
+    .answer-block h2 { font-size: 14px; font-weight: 700; color: #c81e3a; margin: 14px 0 6px; }
+    .answer-block h3 { font-size: 13px; font-weight: 700; color: #e8445e; margin: 12px 0 6px; }
+    .answer-block strong { color: #1a1a2e; font-weight: 700; }
+    .answer-block em { color: #333; font-style: italic; }
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
+      font-size: 9px;
+      color: #aaa;
+      letter-spacing: 0.5px;
+    }
+    .print-btn {
+      display: block;
+      margin: 0 auto 30px;
+      padding: 10px 28px;
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, #c81e3a, #e8445e);
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+    }
+    .print-btn:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <button class="print-btn no-print" onclick="window.print()">⬇ Save as PDF</button>
+
+  <div class="header">
+    <div class="header-icon">✦</div>
+    <h1>AI Career Analysis Report</h1>
+    <p class="subtitle">Generated on ${now} &bull; Powered by Gemini 2.5 Flash</p>
+  </div>
+
+  <div class="candidate-card">
+    <p class="label">Candidate Profile</p>
+    <p class="name">${candidate.name}</p>
+    ${resumeName ? `<p class="detail">📄 Resume: ${resumeName}</p>` : ""}
+    ${candidate.skills ? `<p class="detail">🛠 Key Skills: ${candidate.skills}</p>` : ""}
+  </div>
+
+  ${chatHTML}
+
+  <div class="footer">
+    AI Career Assistant &bull; Confidential Report &bull; ${new Date().getFullYear()}
+  </div>
+</body>
+</html>`;
+
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(fullHTML);
+      printWindow.document.close();
+      showToast("Report opened — use Save as PDF");
+    } else {
+      showToast("Please allow pop-ups to download the report");
+    }
+    setExportingPdf(false);
+  }, [chats, exportingPdf, resumeFileName]);
 
   return (
     <div className="flex h-screen overflow-hidden relative bg-black">
@@ -513,7 +1076,35 @@ function Assistant() {
         }}
       />
 
-      <Toast show={toast} />
+      {/* Floating ambient particles */}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+        {[...Array(6)].map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute rounded-full"
+            style={{
+              width: 2 + Math.random() * 3,
+              height: 2 + Math.random() * 3,
+              background: `rgba(232,68,94,${0.1 + Math.random() * 0.15})`,
+              left: `${10 + Math.random() * 80}%`,
+              top: `${10 + Math.random() * 80}%`,
+            }}
+            animate={{
+              y: [0, -30 - Math.random() * 40, 0],
+              x: [0, (Math.random() - 0.5) * 20, 0],
+              opacity: [0.15, 0.4, 0.15],
+            }}
+            transition={{
+              duration: 5 + Math.random() * 5,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: i * 0.8,
+            }}
+          />
+        ))}
+      </div>
+
+      <Toast show={toast} message={toastMessage} />
 
       {/* ── SIDEBAR ── */}
       <motion.aside
@@ -525,7 +1116,7 @@ function Assistant() {
           damping: 28,
           delay: 0.05,
         }}
-        className="w-60 flex flex-col flex-shrink-0 border-r relative z-10"
+        className="w-72 flex flex-col flex-shrink-0 border-r relative z-10"
         style={{
           borderColor: "rgba(200,30,58,0.14)",
           background: "rgba(12,4,7,0.72)",
@@ -537,19 +1128,25 @@ function Assistant() {
           <div className="flex items-center gap-3 px-1 pt-2 pb-1">
             <Magnetic strength={0.5}>
               <motion.div
-                className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{
                   background: "linear-gradient(135deg, #c81e3a, #e8445e)",
+                  boxShadow: "0 0 20px rgba(200,30,58,0.3)",
                 }}
                 whileHover={{ rotate: [0, -10, 10, -4, 0], scale: 1.12 }}
                 transition={{ duration: 0.5 }}
               >
-                <Sparkles size={15} color="white" />
+                <Sparkles size={16} color="white" />
               </motion.div>
             </Magnetic>
-            <span className="text-white font-semibold text-sm tracking-tight">
-              Career Assistant
-            </span>
+            <div className="flex flex-col">
+              <span className="text-white font-semibold text-sm tracking-tight">
+                Career Assistant
+              </span>
+              <span className="text-[9px]" style={{ color: "rgba(148,163,184,0.35)" }}>
+                AI-Powered Analysis
+              </span>
+            </div>
           </div>
 
           {/* New Chat */}
@@ -579,7 +1176,7 @@ function Assistant() {
           </motion.button>
 
           {/* History */}
-          <div className="flex-1 overflow-y-auto space-y-0.5">
+          <div className="flex-1 overflow-y-auto space-y-0.5 pr-1" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(200,30,58,0.15) transparent" }}>
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -595,6 +1192,13 @@ function Assistant() {
                   key={conv._id}
                   initial={{ opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
+                  exit={{
+                    opacity: 0,
+                    x: -20,
+                    height: 0,
+                    marginBottom: 0,
+                    transition: { duration: 0.25 },
+                  }}
                   transition={{
                     delay: i * 0.05,
                     type: "spring",
@@ -606,24 +1210,42 @@ function Assistant() {
                     conv={conv}
                     active={currentId === conv._id}
                     onClick={() => setCurrentId(conv._id)}
+                    onDelete={handleDeleteConversation}
                   />
                 </motion.div>
               ))}
             </AnimatePresence>
           </div>
 
-          {/* Logout */}
+          {/* ── Sign Out Button ── */}
           <motion.button
             onClick={() => {
               localStorage.removeItem("token");
               window.location.reload();
             }}
-            className="flex items-center gap-2 px-1 py-1 text-xs"
-            style={{ color: "rgba(148,163,184,0.3)" }}
-            whileHover={{ color: "rgba(248,113,113,0.75)", x: 2 }}
+            className="flex items-center justify-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium"
+            style={{
+              background: "rgba(200,30,58,0.08)",
+              border: "1px solid rgba(200,30,58,0.2)",
+              color: "rgba(253,164,175,0.7)",
+            }}
+            whileHover={{
+              backgroundColor: "rgba(200,30,58,0.18)",
+              borderColor: "rgba(200,30,58,0.4)",
+              color: "#fda4af",
+              scale: 1.02,
+            }}
+            whileTap={{ scale: 0.96 }}
             transition={{ type: "spring", stiffness: 400, damping: 20 }}
           >
-            <LogOut size={11} /> Sign out
+            <motion.span
+              style={{ display: "flex" }}
+              whileHover={{ rotate: -15 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <LogOut size={13} />
+            </motion.span>
+            Sign Out
           </motion.button>
         </div>
       </motion.aside>
@@ -657,7 +1279,7 @@ function Assistant() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <AttachZone file={file} setFile={setFile} />
             <AnimatePresence>
               {file && (
@@ -691,195 +1313,277 @@ function Assistant() {
                 </motion.button>
               )}
             </AnimatePresence>
+
+            {/* Divider */}
+            <div
+              className="h-5 mx-1"
+              style={{
+                width: 1,
+                background: "rgba(200,30,58,0.15)",
+              }}
+            />
+
+            {/* Resume Preview toggle */}
+            <GlassButton
+              icon={Eye}
+              label="Resume"
+              active={showResumePanel}
+              onClick={() => setShowResumePanel(!showResumePanel)}
+            />
+
+            {/* Download PDF Report */}
+            <GlassButton
+              icon={Download}
+              label="Report"
+              active={exportingPdf}
+              onClick={handleExportPdf}
+              badge={chats.length > 0}
+            />
           </div>
         </motion.header>
 
-        {/* Chat feed */}
-        <div className="flex-1 overflow-y-auto px-6 py-8">
-          <div className="max-w-2xl mx-auto space-y-8">
-            {/* Empty state */}
-            <AnimatePresence>
-              {chats.length === 0 && !loading && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 260,
-                    damping: 26,
-                    delay: 0.2,
-                  }}
-                  className="flex flex-col items-center justify-center pt-24 gap-3 text-center"
-                >
-                  <Magnetic strength={0.6}>
+        {/* Content area — chat + optional resume panel */}
+        <div className="flex-1 flex min-h-0">
+          {/* Chat feed */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 overflow-y-auto px-6 py-8">
+              <div className="max-w-2xl mx-auto space-y-8">
+                {/* Empty state */}
+                <AnimatePresence>
+                  {chats.length === 0 && !loading && (
                     <motion.div
-                      className="w-14 h-14 rounded-2xl flex items-center justify-center mb-1"
-                      style={{
-                        background: "linear-gradient(135deg, #c81e3a, #e8445e)",
-                        boxShadow: "0 0 36px rgba(200,30,58,0.32)",
-                      }}
-                      animate={{
-                        boxShadow: [
-                          "0 0 28px rgba(200,30,58,0.28)",
-                          "0 0 48px rgba(200,30,58,0.45)",
-                          "0 0 28px rgba(200,30,58,0.28)",
-                        ],
-                      }}
-                      transition={{
-                        duration: 3,
-                        repeat: Infinity,
-                        ease: "easeInOut",
-                      }}
-                    >
-                      <Sparkles size={26} color="white" />
-                    </motion.div>
-                  </Magnetic>
-                  <motion.h2
-                    className="text-xl font-semibold text-white"
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.35 }}
-                  >
-                    How can I help?
-                  </motion.h2>
-                  <motion.p
-                    className="text-sm"
-                    style={{ color: "rgba(148,163,184,0.45)" }}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.45 }}
-                  >
-                    Ask anything about your career — resume, interviews, job
-                    search.
-                  </motion.p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Messages */}
-            <AnimatePresence initial={false}>
-              {chats.map((chat, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ type: "spring", stiffness: 280, damping: 26 }}
-                  className="space-y-4"
-                >
-                  {/* User bubble */}
-                  <div className="flex justify-end">
-                    <motion.div
-                      initial={{ opacity: 0, x: 14, scale: 0.95 }}
-                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
                       transition={{
                         type: "spring",
-                        stiffness: 320,
-                        damping: 24,
+                        stiffness: 260,
+                        damping: 26,
+                        delay: 0.2,
                       }}
-                      className="max-w-sm px-4 py-3 rounded-2xl rounded-tr-sm text-sm"
-                      style={{
-                        background: "rgba(200,30,58,0.14)",
-                        border: "1px solid rgba(200,30,58,0.24)",
-                        color: "#ffe4e8",
-                      }}
+                      className="flex flex-col items-center justify-center pt-24 gap-3 text-center"
                     >
-                      {chat.question}
-                    </motion.div>
-                  </div>
+                      <Magnetic strength={0.6}>
+                        <motion.div
+                          className="w-16 h-16 rounded-2xl flex items-center justify-center mb-1"
+                          style={{
+                            background: "linear-gradient(135deg, #c81e3a, #e8445e)",
+                            boxShadow: "0 0 36px rgba(200,30,58,0.32)",
+                          }}
+                          animate={{
+                            boxShadow: [
+                              "0 0 28px rgba(200,30,58,0.28)",
+                              "0 0 48px rgba(200,30,58,0.45)",
+                              "0 0 28px rgba(200,30,58,0.28)",
+                            ],
+                          }}
+                          transition={{
+                            duration: 3,
+                            repeat: Infinity,
+                            ease: "easeInOut",
+                          }}
+                        >
+                          <Sparkles size={28} color="white" />
+                        </motion.div>
+                      </Magnetic>
+                      <motion.h2
+                        className="text-xl font-semibold text-white"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.35 }}
+                      >
+                        How can I help?
+                      </motion.h2>
+                      <motion.p
+                        className="text-sm max-w-xs"
+                        style={{ color: "rgba(148,163,184,0.45)" }}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.45 }}
+                      >
+                        Upload a resume and ask anything — analysis, strengths,
+                        recommendations, and more.
+                      </motion.p>
 
-                  {/* AI bubble */}
-                  <div className="flex gap-3">
-                    <Magnetic strength={0.35}>
+                      {/* Feature hints */}
                       <motion.div
-                        className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
+                        className="flex flex-wrap justify-center gap-2 mt-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.6 }}
+                      >
+                        {[
+                          { icon: FileUp, text: "Upload Resume" },
+                          { icon: Eye, text: "Preview PDF" },
+                          { icon: Download, text: "Export Report" },
+                        ].map(({ icon: Icon, text }, i) => (
+                          <motion.div
+                            key={text}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.7 + i * 0.1 }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px]"
+                            style={{
+                              background: "rgba(200,30,58,0.06)",
+                              border: "1px solid rgba(200,30,58,0.12)",
+                              color: "rgba(253,164,175,0.4)",
+                            }}
+                          >
+                            <Icon size={10} />
+                            {text}
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Messages */}
+                <AnimatePresence initial={false}>
+                  {chats.map((chat, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 14 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ type: "spring", stiffness: 280, damping: 26 }}
+                      className="space-y-4"
+                    >
+                      {/* User bubble */}
+                      <div className="flex justify-end">
+                        <motion.div
+                          initial={{ opacity: 0, x: 14, scale: 0.95 }}
+                          animate={{ opacity: 1, x: 0, scale: 1 }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 320,
+                            damping: 24,
+                          }}
+                          className="max-w-sm px-4 py-3 rounded-2xl rounded-tr-sm text-sm"
+                          style={{
+                            background: "rgba(200,30,58,0.14)",
+                            border: "1px solid rgba(200,30,58,0.24)",
+                            color: "#ffe4e8",
+                          }}
+                        >
+                          {chat.question}
+                        </motion.div>
+                      </div>
+
+                      {/* AI bubble */}
+                      <div className="flex gap-3">
+                        <Magnetic strength={0.35}>
+                          <motion.div
+                            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
+                            style={{
+                              background:
+                                "linear-gradient(135deg, #c81e3a, #e8445e)",
+                              boxShadow: "0 0 14px rgba(232,68,94,0.22)",
+                            }}
+                            whileHover={{ scale: 1.12, rotate: 8 }}
+                            transition={{
+                              type: "spring",
+                              stiffness: 400,
+                              damping: 14,
+                            }}
+                          >
+                            <Zap size={15} color="white" />
+                          </motion.div>
+                        </Magnetic>
+                        <AiBubble answer={chat.answer} />
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+
+                {/* Loading */}
+                <AnimatePresence>
+                  {loading && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 24 }}
+                      className="flex gap-3"
+                    >
+                      <motion.div
+                        className="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center"
+                        style={{ background: "rgba(200,30,58,0.18)" }}
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 1.4, repeat: Infinity }}
+                      >
+                        <motion.span
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                          style={{ display: "flex", color: "rgba(232,68,94,0.5)" }}
+                        >
+                          <Sparkles size={12} />
+                        </motion.span>
+                      </motion.div>
+                      <div
+                        className="flex-1 rounded-2xl rounded-tl-sm flex flex-col justify-center gap-2 px-5 py-4"
                         style={{
-                          background:
-                            "linear-gradient(135deg, #c81e3a, #e8445e)",
-                          boxShadow: "0 0 14px rgba(232,68,94,0.22)",
-                        }}
-                        whileHover={{ scale: 1.12, rotate: 8 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 400,
-                          damping: 14,
+                          background: "rgba(10,3,6,0.6)",
+                          border: "1px solid rgba(200,30,58,0.1)",
+                          minHeight: 64,
                         }}
                       >
-                        <Zap size={15} color="white" />
-                      </motion.div>
-                    </Magnetic>
-                    <AiBubble answer={chat.answer} />
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                        <ShimmerLine width="75%" delay={0} />
+                        <ShimmerLine width="55%" delay={0.15} />
+                        <ShimmerLine width="40%" delay={0.3} />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-            {/* Loading */}
-            <AnimatePresence>
-              {loading && (
+                <div ref={chatEndRef} />
+              </div>
+            </div>
+
+            {/* Input */}
+            <div className="px-6 pb-6 flex-shrink-0">
+              <form onSubmit={handleSearch} className="max-w-2xl mx-auto">
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 24 }}
-                  className="flex gap-3"
+                  animate={{
+                    borderColor: inputFocused
+                      ? "rgba(200,30,58,0.55)"
+                      : "rgba(200,30,58,0.22)",
+                    boxShadow: inputFocused
+                      ? "0 0 0 3px rgba(200,30,58,0.08), 0 0 24px rgba(200,30,58,0.1)"
+                      : "none",
+                  }}
+                  transition={{ duration: 0.18 }}
+                  className="flex items-center gap-2 px-4 py-3 rounded-2xl"
+                  style={{
+                    background: "rgba(10,3,6,0.82)",
+                    border: "1px solid rgba(200,30,58,0.22)",
+                  }}
                 >
-                  <motion.div
-                    className="w-8 h-8 rounded-xl flex-shrink-0"
-                    style={{ background: "rgba(200,30,58,0.18)" }}
-                    animate={{ opacity: [0.5, 1, 0.5] }}
-                    transition={{ duration: 1.4, repeat: Infinity }}
+                  <input
+                    type="text"
+                    className="flex-1 bg-transparent outline-none text-sm"
+                    style={{ color: "#e2e8f0" }}
+                    placeholder="Ask anything…"
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    onFocus={() => setInputFocused(true)}
+                    onBlur={() => setInputFocused(false)}
                   />
-                  <div
-                    className="flex-1 rounded-2xl rounded-tl-sm flex items-center"
-                    style={{
-                      background: "rgba(10,3,6,0.6)",
-                      border: "1px solid rgba(200,30,58,0.1)",
-                      minHeight: 52,
-                    }}
-                  >
-                    <TypingDots />
-                  </div>
+                  <SendButton disabled={loading || !question.trim()} />
                 </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div ref={chatEndRef} />
+              </form>
+            </div>
           </div>
-        </div>
 
-        {/* Input */}
-        <div className="px-6 pb-6 flex-shrink-0">
-          <form onSubmit={handleSearch} className="max-w-2xl mx-auto">
-            <motion.div
-              animate={{
-                borderColor: inputFocused
-                  ? "rgba(200,30,58,0.55)"
-                  : "rgba(200,30,58,0.22)",
-                boxShadow: inputFocused
-                  ? "0 0 0 3px rgba(200,30,58,0.08), 0 0 24px rgba(200,30,58,0.1)"
-                  : "none",
-              }}
-              transition={{ duration: 0.18 }}
-              className="flex items-center gap-2 px-4 py-3 rounded-2xl"
-              style={{
-                background: "rgba(10,3,6,0.82)",
-                border: "1px solid rgba(200,30,58,0.22)",
-              }}
-            >
-              <input
-                type="text"
-                className="flex-1 bg-transparent outline-none text-sm"
-                style={{ color: "#e2e8f0" }}
-                placeholder="Ask anything…"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                onFocus={() => setInputFocused(true)}
-                onBlur={() => setInputFocused(false)}
+          {/* ── Resume Preview Panel ── */}
+          <AnimatePresence>
+            {showResumePanel && (
+              <ResumePanel
+                url={resumeUrl}
+                fileName={resumeFileName}
+                onClose={() => setShowResumePanel(false)}
               />
-              <SendButton disabled={loading || !question.trim()} />
-            </motion.div>
-          </form>
+            )}
+          </AnimatePresence>
         </div>
       </main>
     </div>
